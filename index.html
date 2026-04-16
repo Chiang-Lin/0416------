@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>職缺追蹤工具 | JobTracker</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+    <!-- 登入畫面 (Auth Screen) -->
+    <div id="login-container" class="login-container">
+        <div class="login-card">
+            <h1>JobTracker</h1>
+            <p>管理並追蹤您的求職進度</p>
+            <p class="login-hint">請確保您允許彈出視窗以完成授權，並將您的 Client ID 填入 JS 設定中。</p>
+            <!-- 提供手動登入按鈕作為備用 -->
+            <button id="auth-btn" class="btn btn-primary" style="margin-top:20px; display:none;">Google 授權登入</button>
+        </div>
+    </div>
+
+    <!-- 應用主畫面 (App Container) - 預設隱藏 -->
+    <div id="app-container" class="app-container" style="display: none;">
+        
+        <!-- Navbar -->
+        <header class="navbar">
+            <div class="navbar-brand">
+                <span class="icon">🚀</span>
+                <span>JobTracker</span>
+            </div>
+            <div class="user-profile">
+                <span id="user-name">User</span>
+                <button id="logout-btn" class="btn btn-icon">登出</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <!-- 數據小統計 (Dashboard) -->
+            <section class="dashboard">
+                <div class="stat-card">
+                    <div class="stat-title">總職缺蒐集</div>
+                    <div class="stat-value" id="stat-total">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">已投遞家數</div>
+                    <div class="stat-value text-blue" id="stat-applied">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">業主回覆率</div>
+                    <div class="stat-value text-green" id="stat-rate">0%</div>
+                </div>
+            </section>
+
+            <div class="content-grid">
+                <!-- 新增職缺表單 -->
+                <section class="form-section panel">
+                    <h2>新增職缺紀錄</h2>
+                    <form id="add-job-form">
+                        <div class="form-group">
+                            <label for="jobUrl">職缺網址 <span class="required">*</span></label>
+                            <input type="url" id="jobUrl" name="jobUrl" required placeholder="https://...">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="jobBank">人力銀行</label>
+                            <select id="jobBank" name="jobBank">
+                                <option value="">請選擇</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobCompany">職缺公司 <span class="required">*</span></label>
+                            <input type="text" id="jobCompany" name="jobCompany" required placeholder="例如：小熊科技有限公司">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobTitle">職缺 Title <span class="required">*</span></label>
+                            <input type="text" id="jobTitle" name="jobTitle" required placeholder="例如：軟體專案管理人員 PM">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobCategory">職務分類</label>
+                            <select id="jobCategory" name="jobCategory">
+                                <option value="">請選擇</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="jobStatus">目前狀態</label>
+                            <select id="jobStatus" name="jobStatus">
+                                <option value="">請選擇</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100" id="submit-btn" disabled>
+                            新增紀錄 (請先驗證帳號)
+                        </button>
+                    </form>
+                </section>
+
+                <!-- 職缺列表 -->
+                <section class="list-section panel">
+                    <div class="list-header">
+                        <h2>職缺列表</h2>
+                        <button id="refresh-btn" class="btn btn-icon" title="重新整理">🔄</button>
+                    </div>
+                    
+                    <div class="loader" id="list-loader" style="display: none;">載入資料中...</div>
+                    <div id="job-list" class="job-list">
+                        <!-- 資料卡片會透過 JS 插入 -->
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- 編輯特定職缺的 Modal -->
+    <div id="edit-modal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>編輯職缺紀錄</h2>
+                <button class="close-modal-btn" id="close-modal-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-job-form">
+                    <input type="hidden" id="edit-id" name="id">
+                    
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="edit-jobStatus">狀態</label>
+                            <select id="edit-jobStatus" name="status"></select>
+                        </div>
+                        <div class="form-group half">
+                            <label for="edit-applyTime">投遞履歷時間</label>
+                            <input type="datetime-local" id="edit-applyTime" name="applyTime">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label>業主是否回覆</label>
+                            <div class="radio-group">
+                                <label><input type="radio" name="replied" value="是"> 是</label>
+                                <label><input type="radio" name="replied" value="否"> 否</label>
+                            </div>
+                        </div>
+                        <div class="form-group half">
+                            <label for="edit-replyDate">回覆日期</label>
+                            <input type="date" id="edit-replyDate" name="replyDate">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="edit-notes">面試紀錄 / 心得</label>
+                        <textarea id="edit-notes" name="notes" rows="4" placeholder="紀錄面試考題、主管特質或任何筆記..."></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-outline" id="cancel-edit-btn">取消</button>
+                        <button type="submit" class="btn btn-primary" id="save-edit-btn">儲存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示框 -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- 主邏輯載入 -->
+    <script src="app.js"></script>
+</body>
+</html>
