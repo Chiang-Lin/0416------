@@ -33,7 +33,9 @@ const logoutBtn = document.getElementById('logout-btn');
 const addJobForm = document.getElementById('add-job-form');
 const submitBtn = document.getElementById('submit-btn');
 const jobBankSelect = document.getElementById('jobBank');
+const jobLocationSelect = document.getElementById('jobLocation');
 const jobCategorySelect = document.getElementById('jobCategory');
+const jobSalarySelect = document.getElementById('jobSalary');
 const jobStatusSelect = document.getElementById('jobStatus');
 
 // 顯示相關
@@ -150,27 +152,33 @@ async function gapiFetch(url, options = {}) {
 // ==========================================
 async function fetchOptions() {
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_OPTIONS}!A2:C`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_OPTIONS}!A2:E`;
         const data = await gapiFetch(url);
 
         const rows = data.values || [];
 
         // 分清空選項
+        jobLocationSelect.innerHTML = '<option value="">請選擇</option>';
         jobCategorySelect.innerHTML = '<option value="">請選擇</option>';
+        jobSalarySelect.innerHTML = '<option value="">請選擇</option>';
         jobStatusSelect.innerHTML = '<option value="">請選擇</option>';
         jobBankSelect.innerHTML = '<option value="">請選擇</option>';
         document.getElementById('edit-jobStatus').innerHTML = ''; // Modal用
 
         rows.forEach(row => {
-            // A欄：職務分類
-            if (row[0]) addOption(jobCategorySelect, row[0]);
-            // B欄：狀態
-            if (row[1]) {
-                addOption(jobStatusSelect, row[1]);
-                addOption(document.getElementById('edit-jobStatus'), row[1]);
+            // A欄：地區
+            if (row[0]) addOption(jobLocationSelect, row[0]);
+            // B欄：職務分類
+            if (row[1]) addOption(jobCategorySelect, row[1]);
+            // C欄：薪資
+            if (row[2]) addOption(jobSalarySelect, row[2]);
+            // D欄：狀態
+            if (row[3]) {
+                addOption(jobStatusSelect, row[3]);
+                addOption(document.getElementById('edit-jobStatus'), row[3]);
             }
-            // C欄：人力銀行
-            if (row[2]) addOption(jobBankSelect, row[2]);
+            // E欄：人力銀行
+            if (row[4]) addOption(jobBankSelect, row[4]);
         });
 
     } catch (err) {
@@ -193,7 +201,7 @@ async function fetchJobs() {
     jobListContainer.innerHTML = '';
 
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A2:L`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A2:N`;
         const data = await gapiFetch(url);
 
         const rows = data.values || [];
@@ -206,13 +214,15 @@ async function fetchJobs() {
                 url: row[2] || '',
                 bank: row[3] || '',
                 company: row[4] || '',
-                title: row[5] || '',
-                category: row[6] || '',
-                applyTime: row[7] || '',
-                status: row[8] || '',
-                replied: row[9] || '',
-                replyDate: row[10] || '',
-                notes: row[11] || ''
+                location: row[5] || '',
+                title: row[6] || '',
+                category: row[7] || '',
+                salary: row[8] || '',
+                applyTime: row[9] || '',
+                status: row[10] || '',
+                replied: row[11] || '',
+                replyDate: row[12] || '',
+                notes: row[13] || ''
             };
         });
 
@@ -246,17 +256,19 @@ addJobForm.addEventListener('submit', async (e) => {
         document.getElementById('jobUrl').value,
         document.getElementById('jobBank').value,
         document.getElementById('jobCompany').value,
+        document.getElementById('jobLocation').value,
         document.getElementById('jobTitle').value,
         document.getElementById('jobCategory').value,
-        '', // 投遞時間留空
-        document.getElementById('jobStatus').value,
-        '否', // 預設未回覆
-        '', // 回覆日期留空
-        ''  // 面試紀錄留空
+        document.getElementById('jobSalary').value,
+        '', // 投遞時間留空 (J)
+        document.getElementById('jobStatus').value, // (K)
+        '否', // 預設未回覆 (L)
+        '', // 回覆日期留空 (M)
+        ''  // 面試紀錄留空 (N)
     ];
 
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A:L:append?valueInputOption=USER_ENTERED`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A:N:append?valueInputOption=USER_ENTERED`;
         await gapiFetch(url, {
             method: 'POST',
             body: JSON.stringify({ values: [rowData] })
@@ -279,9 +291,9 @@ addJobForm.addEventListener('submit', async (e) => {
 // ==========================================
 // 快速更新狀態
 async function quickUpdateStatus(rowIndex, newStatus) {
-    // 狀態在 I 欄 (對應 array 的 8)
+    // 狀態在 K 欄
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!I${rowIndex}?valueInputOption=USER_ENTERED`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!K${rowIndex}?valueInputOption=USER_ENTERED`;
         await gapiFetch(url, {
             method: 'PUT',
             body: JSON.stringify({ values: [[newStatus]] })
@@ -318,10 +330,9 @@ editJobForm.addEventListener('submit', async (e) => {
     const notes = document.getElementById('edit-notes').value;
 
     try {
-        // 在我們的架構中，狀態~面試紀錄 是從 I 欄 到 L 欄 (欄位8~11，對應工作表是 H~L 嗎？不對：
-        // A=ID, B=Date, C=Url, D=Bank, E=Company, F=Title, G=Category, H=ApplyTime, I=Status, J=Replied, K=ReplyDate, L=Notes.
-        // H 到 L 共有 5 個直行
-        const range = `${SHEET_JOBS}!H${target.rowIndex}:L${target.rowIndex}`;
+        // 在我們的架構中，ApplyTime 到 Notes 是從 J 到 N 欄
+        // J=ApplyTime, K=Status, L=Replied, M=ReplyDate, N=Notes
+        const range = `${SHEET_JOBS}!J${target.rowIndex}:N${target.rowIndex}`;
         const values = [[applyTime, status, replied, replyDate, notes]];
 
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
@@ -378,7 +389,9 @@ function renderJobs() {
             
             <div class="job-tags">
                 ${job.bank ? `<span class="tag">#${job.bank}</span>` : ''}
+                ${job.location ? `<span class="tag">#${job.location}</span>` : ''}
                 ${job.category ? `<span class="tag">#${job.category}</span>` : ''}
+                ${job.salary ? `<span class="tag">#${job.salary}</span>` : ''}
                 ${job.status ? `<span class="tag ${statusClass}">${job.status}</span>` : ''}
             </div>
 
