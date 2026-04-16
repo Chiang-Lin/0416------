@@ -394,6 +394,7 @@ function renderJobs() {
             return `<option value="${opt.value}" ${job.status === opt.value ? 'selected' : ''}>${opt.value}</option>`;
         }).join('')}
                     </select>
+                    <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem; color: #EF4444; border-color: #fca5a5;" onclick="deleteJob('${job.id}')">刪除</button>
                     <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem;" onclick="openEditModal('${job.id}')">編輯</button>
                 </div>
             </div>
@@ -429,6 +430,55 @@ function updateDashboard() {
     statApplied.textContent = appliedStr;
     statRate.textContent = `${rate}%`;
 }
+
+// ==========================================
+// API: 刪除職缺紀錄 (Delete row)
+// ==========================================
+window.deleteJob = async function(id) {
+    if (!confirm('您確定要刪除這筆紀錄嗎？這將會從 Google 試算表中永久移除！')) return;
+    
+    const target = jobsData.find(j => j.id === id);
+    if (!target) return;
+    
+    try {
+        showToast('正在刪除中...', 'success');
+        
+        // 1. 先取得這張表 (SHEET_JOBS) 的 sheetId
+        const ssInfoUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets(properties(sheetId,title))`;
+        const ssInfo = await gapiFetch(ssInfoUrl);
+        const sheet = ssInfo.sheets.find(s => s.properties.title === SHEET_JOBS);
+        if (!sheet) throw new Error('找不到工作表 ID');
+        
+        const sheetId = sheet.properties.sheetId;
+        
+        // 2. 呼叫 batchUpdate 實體刪除該 Row
+        const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`;
+        await gapiFetch(batchUrl, {
+            method: 'POST',
+            body: JSON.stringify({
+                requests: [
+                    {
+                        deleteDimension: {
+                            range: {
+                                sheetId: sheetId,
+                                dimension: "ROWS",
+                                startIndex: target.rowIndex - 1, // 0-based index
+                                endIndex: target.rowIndex
+                            }
+                        }
+                    }
+                ]
+            })
+        });
+        
+        showToast('刪除成功！', 'success');
+        await fetchJobs(); // 重新讀取，確保 rowIndex 序列正確
+        
+    } catch (err) {
+        showToast('刪除失敗: ' + err.message, 'error');
+    }
+}
+
 
 
 // ==========================================
