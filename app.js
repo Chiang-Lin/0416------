@@ -38,13 +38,18 @@ const jobCategorySelect = document.getElementById('jobCategory');
 const jobSalarySelect = document.getElementById('jobSalary');
 const jobStatusSelect = document.getElementById('jobStatus');
 
-// 顯示相關
 const jobListContainer = document.getElementById('job-list');
 const listLoader = document.getElementById('list-loader');
 const refreshBtn = document.getElementById('refresh-btn');
 const statTotal = document.getElementById('stat-total');
 const statApplied = document.getElementById('stat-applied');
 const statRate = document.getElementById('stat-rate');
+
+// 篩選相關
+const filterKeyword = document.getElementById('filter-keyword');
+const filterStatus = document.getElementById('filter-status');
+const filterInterest = document.getElementById('filter-interest');
+const resetFilterBtn = document.getElementById('reset-filter-btn');
 
 // Modal 相關
 const editModal = document.getElementById('edit-modal');
@@ -164,6 +169,7 @@ async function fetchOptions() {
         jobStatusSelect.innerHTML = '<option value="">請選擇</option>';
         jobBankSelect.innerHTML = '<option value="">請選擇</option>';
         document.getElementById('edit-jobStatus').innerHTML = ''; // Modal用
+        filterStatus.innerHTML = '<option value="">所有狀態</option>'; // 篩選器用
 
         rows.forEach(row => {
             // A欄：地區
@@ -176,6 +182,7 @@ async function fetchOptions() {
             if (row[3]) {
                 addOption(jobStatusSelect, row[3]);
                 addOption(document.getElementById('edit-jobStatus'), row[3]);
+                addOption(filterStatus, row[3]);
             }
             // E欄：人力銀行
             if (row[4]) addOption(jobBankSelect, row[4]);
@@ -201,7 +208,7 @@ async function fetchJobs() {
     jobListContainer.innerHTML = '';
 
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A2:N`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A2:P`;
         const data = await gapiFetch(url);
 
         const rows = data.values || [];
@@ -222,7 +229,9 @@ async function fetchJobs() {
                 status: row[10] || '',
                 replied: row[11] || '',
                 replyDate: row[12] || '',
-                notes: row[13] || ''
+                notes: row[13] || '',
+                interest: row[14] || '',
+                remark: row[15] || ''
             };
         });
 
@@ -264,11 +273,13 @@ addJobForm.addEventListener('submit', async (e) => {
         document.getElementById('jobStatus').value, // (K)
         '否', // 預設未回覆 (L)
         '', // 回覆日期留空 (M)
-        ''  // 面試紀錄留空 (N)
+        '', // 面試紀錄留空 (N)
+        document.getElementById('jobInterest').value, // 興趣程度 (O)
+        document.getElementById('jobRemark').value  // 備註 (P)
     ];
 
     try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A:N:append?valueInputOption=USER_ENTERED`;
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_JOBS}!A:P:append?valueInputOption=USER_ENTERED`;
         await gapiFetch(url, {
             method: 'POST',
             body: JSON.stringify({ values: [rowData] })
@@ -328,12 +339,14 @@ editJobForm.addEventListener('submit', async (e) => {
     const replied = document.querySelector('input[name="replied"]:checked')?.value || '否';
     const replyDate = document.getElementById('edit-replyDate').value;
     const notes = document.getElementById('edit-notes').value;
+    const interest = document.getElementById('edit-jobInterest').value;
+    const remark = document.getElementById('edit-jobRemark').value;
 
     try {
-        // 在我們的架構中，ApplyTime 到 Notes 是從 J 到 N 欄
-        // J=ApplyTime, K=Status, L=Replied, M=ReplyDate, N=Notes
-        const range = `${SHEET_JOBS}!J${target.rowIndex}:N${target.rowIndex}`;
-        const values = [[applyTime, status, replied, replyDate, notes]];
+        // 在我們的架構中，ApplyTime 到 Remark 是從 J 到 P 欄
+        // J=ApplyTime, K=Status, L=Replied, M=ReplyDate, N=Notes, O=Interest, P=Remark
+        const range = `${SHEET_JOBS}!J${target.rowIndex}:P${target.rowIndex}`;
+        const values = [[applyTime, status, replied, replyDate, notes, interest, remark]];
 
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${range}?valueInputOption=USER_ENTERED`;
         await gapiFetch(url, {
@@ -353,18 +366,54 @@ editJobForm.addEventListener('submit', async (e) => {
     }
 });
 
+// 註冊篩選事件
+filterKeyword.addEventListener('input', renderJobs);
+filterStatus.addEventListener('change', renderJobs);
+filterInterest.addEventListener('change', renderJobs);
+
+resetFilterBtn.addEventListener('click', () => {
+    filterKeyword.value = '';
+    filterStatus.value = '';
+    filterInterest.value = '';
+    renderJobs();
+});
+
 
 // ==========================================
-// UI 渲染邏輯
+// 篩選功能與 UI 渲染邏輯
 // ==========================================
 function renderJobs() {
     jobListContainer.innerHTML = '';
 
+    // 取得篩選條件
+    const keyword = filterKeyword.value.toLowerCase().trim();
+    const statusFilter = filterStatus.value;
+    const interestFilter = filterInterest.value;
+
+    let filteredData = [...jobsData];
+
+    if (keyword) {
+        filteredData = filteredData.filter(job => 
+            (job.title && job.title.toLowerCase().includes(keyword)) ||
+            (job.company && job.company.toLowerCase().includes(keyword)) ||
+            (job.remark && job.remark.toLowerCase().includes(keyword)) ||
+            (job.notes && job.notes.toLowerCase().includes(keyword))
+        );
+    }
+    
+    if (statusFilter) {
+        filteredData = filteredData.filter(job => job.status === statusFilter);
+    }
+    
+    if (interestFilter) {
+        filteredData = filteredData.filter(job => job.interest === interestFilter);
+    }
+
     // 反序排列 (最新的在前面)
-    const sortedData = [...jobsData].reverse();
+    const sortedData = filteredData.reverse();
 
     if (sortedData.length === 0) {
-        jobListContainer.innerHTML = '<div class="loader">目前還沒有紀錄，快去新增吧！</div>';
+        jobListContainer.innerHTML = '<div class="loader">沒有符合篩選條件的紀錄。</div>';
         return;
     }
 
@@ -393,9 +442,11 @@ function renderJobs() {
                 ${job.category ? `<span class="tag">#${job.category}</span>` : ''}
                 ${job.salary ? `<span class="tag">#${job.salary}</span>` : ''}
                 ${job.status ? `<span class="tag ${statusClass}">${job.status}</span>` : ''}
+                ${job.interest ? `<span class="tag" style="background:#FFF0F5; color:#C28193; border-color:#F5D0D9;">${job.interest}</span>` : ''}
             </div>
 
-            ${job.notes ? `<div style="font-size:0.85rem; color:#6b7280; margin-bottom:12px; font-style:italic;">"${job.notes}"</div>` : ''}
+            ${job.remark ? `<div style="font-size:0.85rem; color:#6b7280; margin-bottom:8px;"><strong>備註：</strong>${job.remark}</div>` : ''}
+            ${job.notes ? `<div style="font-size:0.85rem; color:#6b7280; margin-bottom:12px; font-style:italic;">面試紀錄："${job.notes}"</div>` : ''}
 
             <div class="job-footer">
                 <div>加入日期：${job.date}</div>
@@ -514,6 +565,8 @@ window.openEditModal = function (id) {
 
     document.getElementById('edit-replyDate').value = job.replyDate;
     document.getElementById('edit-notes').value = job.notes;
+    document.getElementById('edit-jobInterest').value = job.interest || '';
+    document.getElementById('edit-jobRemark').value = job.remark || '';
 
     editModal.style.display = 'flex';
 }

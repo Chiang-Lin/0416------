@@ -300,7 +300,7 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     border-bottom: 1px solid var(--border);
     padding-bottom: 12px;
 }
@@ -309,6 +309,36 @@ input:focus, select:focus, textarea:focus {
     margin: 0;
     border: none;
     padding: 0;
+}
+
+/* 篩選器 */
+.filter-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    background: var(--bg-color);
+    padding: 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    align-items: center;
+}
+
+.filter-input {
+    flex: 2;
+    min-width: 200px;
+    margin-bottom: 0;
+}
+
+.filter-select {
+    flex: 1;
+    min-width: 140px;
+    margin-bottom: 0;
+}
+
+.filter-reset-btn {
+    padding: 8px 16px;
+    white-space: nowrap;
 }
 
 .job-list {
