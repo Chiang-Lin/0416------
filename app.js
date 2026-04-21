@@ -107,11 +107,16 @@ logoutBtn.addEventListener('click', () => {
             console.log('Token revoked');
         });
     }
+    handleAuthError('已登出');
+});
+
+function handleAuthError(msg = '認證過期或失效，請重新授權') {
     accessToken = null;
     loginContainer.style.display = 'flex';
     appContainer.style.display = 'none';
     jobsData = [];
-});
+    showToast(msg, 'error');
+}
 
 // ==========================================
 // 初始化應用程式
@@ -145,7 +150,11 @@ async function gapiFetch(url, options = {}) {
     }
 
     if (!response.ok) {
-        console.error("API Error Response:", result);
+        console.error("API Error Response:", result, "Status:", response.status);
+        if (response.status === 401) {
+            handleAuthError();
+            throw new Error('授權已過期');
+        }
         throw new Error(result.error?.message || 'API 請求失敗');
     }
 
